@@ -14,14 +14,26 @@ export default function Settings() {
   const [email] = useState(data.profile?.email ?? "");
   const [avatar, setAvatar] = useState<string | undefined>();
   const [saved, setSaved] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [confirm, setConfirm] = useState(false);
 
   const saveProfileChanges = async () => {
     if (!data.profile) return;
-    await saveProfile(name.trim() || data.profile.name, avatar);
-    setAvatar(undefined);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setSavingProfile(true);
+    setSaveError("");
+    try {
+      await saveProfile(name.trim() || data.profile.name, avatar);
+      setAvatar(undefined);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      setSaveError(
+        e instanceof Error ? e.message : "Couldn't save your profile. Please try again."
+      );
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const doReset = async () => {
@@ -59,13 +71,16 @@ export default function Settings() {
             </Field>
           </div>
           <div className="mt-4 flex items-center gap-3">
-            <Button onClick={saveProfileChanges}>Save changes</Button>
+            <Button onClick={saveProfileChanges} disabled={savingProfile}>
+              {savingProfile ? "Saving…" : "Save changes"}
+            </Button>
             {saved && <span className="text-sm text-sage">Saved</span>}
             <span className="flex-1" />
             <Button variant="outline" onClick={doSignOut}>
               Sign out
             </Button>
           </div>
+          {saveError && <p className="mt-3 text-sm text-clay">{saveError}</p>}
         </Card>
 
         <Card className="p-6">

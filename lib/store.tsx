@@ -357,7 +357,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (avatarDataUrl?.startsWith("data:")) {
           row.avatar_path = await uploadAvatar(supabase, userId, avatarDataUrl);
         }
-        await supabase.from("profiles").upsert(row);
+        const { error } = await supabase.from("profiles").upsert(row);
+        if (error) throw error;
         await refresh();
       },
       recordConsent: async () => {
@@ -376,7 +377,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (avatarDataUrl?.startsWith("data:")) {
           avatar_path = await uploadAvatar(supabase, userId, avatarDataUrl);
         }
-        await supabase.from("beneficiaries").insert({
+        const { error } = await supabase.from("beneficiaries").insert({
           user_id: userId,
           name: b.name,
           relationship: b.relationship,
@@ -385,6 +386,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           notes: b.notes ?? null,
           avatar_path,
         });
+        if (error) throw error;
         await refresh();
       },
       updateBeneficiary: async (id, patch, avatarDataUrl) => {
@@ -398,7 +400,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (avatarDataUrl?.startsWith("data:")) {
           row.avatar_path = await uploadAvatar(supabase, userId, avatarDataUrl);
         }
-        await supabase.from("beneficiaries").update(row).eq("id", id);
+        const { error } = await supabase.from("beneficiaries").update(row).eq("id", id);
+        if (error) throw error;
         await refresh();
       },
       removeBeneficiary: async (id) => {
