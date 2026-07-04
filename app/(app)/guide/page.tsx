@@ -104,8 +104,8 @@ export default function Guide() {
         subtitle="A quick tour of each part. There’s no right order — start by preserving one memory, and build from there."
       />
 
-      <Card className="mb-6 bg-ink p-6 text-parchment">
-        <h2 className="font-display text-xl">A good first hour</h2>
+      <Card className="mb-6 !border-ink !bg-ink p-6 text-parchment">
+        <h2 className="font-display text-xl text-parchment">A good first hour</h2>
         <ol className="mt-3 space-y-1.5 text-[15px] text-parchment/85">
           <li>1. Add one or two people to your Legacy Circle.</li>
           <li>2. Answer today’s prompt on Home — record it in your own voice.</li>
