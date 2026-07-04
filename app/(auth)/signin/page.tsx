@@ -13,6 +13,23 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [sentReset, setSentReset] = useState(false);
+
+  const forgot = async () => {
+    const supabase = getSupabase();
+    if (!supabase) {
+      setError("Supabase isn't configured yet. Add your project keys to .env.local.");
+      return;
+    }
+    if (!email.trim()) {
+      setError("Enter your email above first, then tap “Forgot password”.");
+      return;
+    }
+    setError("");
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+    if (error) setError(error.message);
+    else setSentReset(true);
+  };
 
   const submit = async () => {
     const supabase = getSupabase();
@@ -80,6 +97,20 @@ export default function SignIn() {
             placeholder="••••••••"
           />
         </Field>
+        <div className="-mt-1 text-right">
+          <button
+            type="button"
+            onClick={forgot}
+            className="text-sm text-sage hover:text-clay hover:underline"
+          >
+            Forgot password?
+          </button>
+        </div>
+        {sentReset && (
+          <p className="text-sm text-sage">
+            If an account exists for that email, a reset link is on its way.
+          </p>
+        )}
         {error && <p className="text-sm text-clay">{error}</p>}
         <Button onClick={submit} disabled={busy || !email.trim() || !password} className="w-full">
           {busy ? "Signing in…" : "Sign in"}
