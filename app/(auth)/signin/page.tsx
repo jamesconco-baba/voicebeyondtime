@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabase } from "@/lib/supabase/client";
 import { AuthShell } from "@/components/auth-shell";
 import { Button, Field, inputClass } from "@/components/ui";
 
-export default function SignIn() {
+// Split out because it reads useSearchParams — Next.js's App Router requires a
+// Suspense boundary around any component that does, or `next build` fails outright.
+function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next");
@@ -125,5 +127,13 @@ export default function SignIn() {
         </Button>
       </div>
     </AuthShell>
+  );
+}
+
+export default function SignIn() {
+  return (
+    <Suspense fallback={null}>
+      <SignInForm />
+    </Suspense>
   );
 }
