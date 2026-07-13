@@ -492,6 +492,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           status: m.status,
         });
         capture(EVENTS.MESSAGE_SCHEDULED, { trigger: m.trigger });
+        // "Send now" messages are marked delivered immediately — tell the recipient
+        // right away rather than waiting for the next day's release check.
+        if (m.status === "delivered" && m.beneficiaryId) {
+          fetch("/api/messages/notify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ beneficiaryId: m.beneficiaryId }),
+          }).catch(() => {
+            // Best-effort — a failed notification shouldn't block message creation.
+          });
+        }
         await refresh();
       },
       updateMessage: async (id, patch) => {

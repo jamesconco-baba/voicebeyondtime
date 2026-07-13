@@ -9,6 +9,7 @@ import { Avatar, AvatarPicker } from "@/components/avatar";
 import { formatDate } from "@/lib/media";
 
 const RELATIONSHIPS = ["Daughter", "Son", "Grandchild", "Spouse", "Sibling", "Other"];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function Circle() {
   const { data, addBeneficiary } = useStore();
@@ -22,7 +23,7 @@ export default function Circle() {
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
-    if (!name.trim()) return;
+    if (!name.trim() || !EMAIL_RE.test(email.trim())) return;
     setSaving(true);
     try {
       await addBeneficiary(
@@ -123,7 +124,7 @@ export default function Circle() {
               ))}
             </select>
           </Field>
-          <Field label="Email (optional)" hint="Where a release notification would eventually be sent.">
+          <Field label="Email" hint="This is where release notifications and sign-in links are sent — required for messages to reach them.">
             <input
               className={inputClass}
               type="email"
@@ -144,7 +145,7 @@ export default function Circle() {
             <Button variant="ghost" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={save} disabled={!name.trim() || saving}>
+            <Button onClick={save} disabled={!name.trim() || !EMAIL_RE.test(email.trim()) || saving}>
               {saving ? "Adding…" : "Add to circle"}
             </Button>
           </div>

@@ -247,3 +247,57 @@ Two independent checks, both server-side (see `lib/admin-auth.ts`):
   `server-only` package, which throws a build error if that ever happens by mistake.
 - Promoting/demoting admins (`/api/admin/promote`) refuses to let the last remaining admin
   demote themselves, so you can't accidentally lock everyone out.
+
+## Recipient portal (`/received`, `/claim`)
+
+Lets a scheduled message actually reach the person it's for. **MVP identity model:**
+access is gated entirely by the email address the creator registered for that recipient
+(`beneficiaries.email`) — there's no separate password or ID-verification step yet. A
+recipient proves who they are simply by receiving a one-time sign-in link at that exact
+email address and clicking it. This is deliberately simple to ship first; swapping in real
+identity verification (e.g. Persona, Stripe Identity) later only touches
+`app/claim/[token]/page.tsx` and `app/api/claim/[token]/complete/route.ts` — nothing else
+in the data model needs to change.
+
+**How it flows:**
+1. A scheduled message's release date arrives (checked once a day by a Vercel Cron job) —
+   or a creator hits "Send now" for an immediate message.
+2. The recipient's registered email gets a message: a **claim invite** (first time) or a
+   **new message** notice (they already have an account) — see `lib/email.ts`.
+3. Clicking through sends a Supabase magic-link sign-in to that same email — never a
+   password, never an email the recipient types in themselves.
+4. First time only: `app/api/claim/[token]/complete` links their new account to that
+   `beneficiaries` row (`claimed_by`) after re-confirming the signed-in email matches.
+5. `/received` shows everything actually marked `delivered` for them — never drafts or
+   still-scheduled items — grouped by who preserved it.
+
+### Setup
+
+1. Run `supabase/schema-inheritance.sql` if you haven't already (this feature needs
+   `beneficiaries.claimed_by` and the `claim_tokens` table it adds), then
+   `supabase/migration_recipients.sql` for the supporting indexes.
+2. Create a free account at [resend.com](https://resend.com), verify your sending domain
+   (or use their test domain while developing), and add to Vercel:
+   ```
+   RESEND_API_KEY=re_...
+   AMBER_EMAIL_FROM="Amber <notify@theamberapp.com>"
+   NEXT_PUBLIC_SITE_URL=https://theamberapp.com
+   CRON_SECRET=<any long random string you make up>
+   ```
+3. `vercel.json` already schedules the release check daily — no extra setup once the env
+   vars above are in place and the project is deployed.
+4. Every beneficiary now requires an email on file (`app/(app)/circle`) — this was
+   previously optional; it's now enforced there since this whole flow depends on it.
+
+### What's intentionally out of scope for this MVP
+
+- **No real identity/age verification.** Anyone with access to the registered inbox can
+  claim — fine for a first version, not sufficient on its own for the minor/guardian
+  scenario long-term (see the Inheritance module's `age_floor` and steward fields, which
+  the data model already supports but this flow doesn't yet enforce).
+- **Milestone-triggered messages aren't auto-released by the cron job** — those still go
+  through the Inheritance module's verification-event flow (creator- or
+  executor-confirmed), which is the appropriate place for a human check given the more
+  sensitive trigger (e.g. "upon my passing").
+- **A recipient claimed by multiple creators** sees all of them grouped separately on
+  `/received` — untested at scale, fine for MVP volumes.
