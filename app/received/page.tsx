@@ -27,13 +27,14 @@ interface ReceivedGroup {
   items: ReceivedItem[];
 }
 
-function SignInGate() {
+function SignInGate({ onSignedIn }: { onSignedIn: () => void }) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const submit = async () => {
+  const sendCode = async () => {
     const supabase = getSupabase();
     if (!supabase) {
       setError("Amber isn't fully configured yet.");
@@ -41,17 +42,34 @@ function SignInGate() {
     }
     setBusy(true);
     setError("");
-    const origin = window.location.origin;
     // shouldCreateUser: false — this entry point only lets someone sign back in to an
     // account that already exists from claiming an invitation; it can't be used to
     // create a brand-new account, unlike the /claim/[token] flow.
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { emailRedirectTo: `${origin}/auth/callback?next=/received`, shouldCreateUser: false },
+      options: { shouldCreateUser: false },
     });
     setBusy(false);
     if (error) setError(error.message);
     else setSent(true);
+  };
+
+  const verify = async () => {
+    const supabase = getSupabase();
+    if (!supabase || code.trim().length < 6) return;
+    setBusy(true);
+    setError("");
+    const { error } = await supabase.auth.verifyOtp({
+      email: email.trim(),
+      token: code.trim(),
+      type: "email",
+    });
+    setBusy(false);
+    if (error) {
+      setError("That code didn't match. Check for a typo, or request a new one.");
+      return;
+    }
+    onSignedIn();
   };
 
   return (
@@ -65,7 +83,7 @@ function SignInGate() {
           <>
             <p className="text-sm font-medium text-ink/80">Welcome back</p>
             <p className="mt-1 text-sm text-ink/70">
-              Enter the email that was registered for you, and we'll send a sign-in link.
+              Enter the email that was registered for you, and we'll send a 6-digit code.
             </p>
             <div className="mt-4">
               <Field label="Email">
@@ -74,7 +92,7 @@ function SignInGate() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && submit()}
+                  onKeyDown={(e) => e.key === "Enter" && sendCode()}
                   placeholder="you@example.com"
                   autoFocus
                 />
@@ -82,15 +100,40 @@ function SignInGate() {
             </div>
             {error && <p className="mt-2 text-sm text-clay">{error}</p>}
             <div className="mt-4">
-              <Button onClick={submit} disabled={busy || !email.trim()} className="w-full">
-                {busy ? "Sending…" : "Send sign-in link"}
+              <Button onClick={sendCode} disabled={busy || !email.trim()} className="w-full">
+                {busy ? "Sending…" : "Send me a code"}
               </Button>
             </div>
           </>
         ) : (
-          <p className="text-sm text-ink/70">
-            If that email is registered with Amber, a sign-in link is on its way. Open it on this device.
-          </p>
+          <>
+            <p className="text-sm font-medium text-ink/80">Enter your code</p>
+            <p className="mt-1 text-sm text-ink/70">We sent a 6-digit code to {email.trim()}.</p>
+            <div className="mt-4">
+              <Field label="Code">
+                <input
+                  className={inputClass}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  onKeyDown={(e) => e.key === "Enter" && verify()}
+                  placeholder="123456"
+                  autoFocus
+                />
+              </Field>
+            </div>
+            {error && <p className="mt-2 text-sm text-clay">{error}</p>}
+            <div className="mt-4 flex items-center gap-3">
+              <Button onClick={verify} disabled={busy || code.trim().length < 6}>
+                {busy ? "Checking…" : "Continue"}
+              </Button>
+              <button onClick={sendCode} disabled={busy} className="text-sm text-sage hover:text-clay hover:underline">
+                Resend code
+              </button>
+            </div>
+          </>
         )}
       </Card>
     </main>
@@ -208,7 +251,7 @@ export default function Received() {
   }, [signedIn]);
 
   if (checking) return null;
-  if (!signedIn) return <SignInGate />;
+  if (!signedIn) return <SignInGate onSignedIn={() => setSignedIn(true)} />;
   if (error) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-parchment px-6">

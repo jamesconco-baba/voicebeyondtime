@@ -253,23 +253,38 @@ Two independent checks, both server-side (see `lib/admin-auth.ts`):
 Lets a scheduled message actually reach the person it's for. **MVP identity model:**
 access is gated entirely by the email address the creator registered for that recipient
 (`beneficiaries.email`) — there's no separate password or ID-verification step yet. A
-recipient proves who they are simply by receiving a one-time sign-in link at that exact
-email address and clicking it. This is deliberately simple to ship first; swapping in real
-identity verification (e.g. Persona, Stripe Identity) later only touches
-`app/claim/[token]/page.tsx` and `app/api/claim/[token]/complete/route.ts` — nothing else
-in the data model needs to change.
+recipient proves who they are by receiving a one-time **6-digit code** at that exact email
+address and typing it back in — deliberately code-based rather than link-based, since a
+clickable "magic link" can get silently visited (and burned) by email link-scanners —
+iPhone Mail's link protection, corporate security tools like Microsoft Defender/Proofpoint
+— before the person ever sees it. A typed code has no such failure mode. This is
+deliberately simple to ship first; swapping in real identity verification (e.g. Persona,
+Stripe Identity) later only touches `app/claim/[token]/page.tsx` and
+`app/api/claim/[token]/complete/route.ts` — nothing else in the data model needs to change.
 
 **How it flows:**
 1. A scheduled message's release date arrives (checked once a day by a Vercel Cron job) —
    or a creator hits "Send now" for an immediate message.
 2. The recipient's registered email gets a message: a **claim invite** (first time) or a
-   **new message** notice (they already have an account) — see `lib/email.ts`.
-3. Clicking through sends a Supabase magic-link sign-in to that same email — never a
-   password, never an email the recipient types in themselves.
-4. First time only: `app/api/claim/[token]/complete` links their new account to that
-   `beneficiaries` row (`claimed_by`) after re-confirming the signed-in email matches.
+   **new message** notice (they already have an account) — see `lib/email.ts`. This is a
+   separate email from Amber's own sender (via Resend), distinct from the one-time code
+   below (which Supabase Auth sends itself).
+3. They visit the link in that email, request a code, and Supabase emails them a 6-digit
+   one-time code. They type it into the page — no password, no clickable sign-in link.
+4. First time only: after verifying the code, `app/api/claim/[token]/complete` links their
+   new account to that `beneficiaries` row (`claimed_by`), re-confirming the verified
+   email matches before doing so.
 5. `/received` shows everything actually marked `delivered` for them — never drafts or
    still-scheduled items — grouped by who preserved it.
+
+### One manual step in Supabase — make sure the email shows a code, not just a link
+
+Supabase Auth's default "Magic Link" email template is written assuming a clickable link.
+A ready-made, Amber-branded replacement — code only, no clickable link, so there's nothing
+for a scanner to prematurely burn — is at
+[`supabase/email-templates/magic-link.html`](./supabase/email-templates/magic-link.html).
+To use it: **Supabase → Authentication → Emails → Magic Link**, paste its contents into the
+body field, and save.
 
 ### Setup
 

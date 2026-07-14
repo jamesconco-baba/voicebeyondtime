@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Logo, Waveform } from "@/components/brand";
-import { Button, Card } from "@/components/ui";
+import { Button, Card, Field, inputClass } from "@/components/ui";
 import { getSupabase } from "@/lib/supabase/client";
 
 interface ClaimInfo {
@@ -18,12 +19,19 @@ interface ClaimInfo {
 
 // The link a recipient opens when a release triggers. MVP identity model: access is
 // gated entirely by the email address the creator registered for this recipient — we
-// send a one-time sign-in link there (never anywhere else), so simply receiving that
-// email and clicking through is the proof of identity for now.
+// send a one-time 6-digit code there (never a clickable sign-in link), so typing that
+// code back in is the proof of identity for now.
+//
+// Deliberately code-based rather than link-based: a clickable magic link can get
+// silently "used up" by email link-scanners (iPhone Mail's link protection, corporate
+// security scanners, etc.) before the person ever sees it, leaving them stuck. A code
+// they type in themselves has no such failure mode.
 export default function Claim({ params }: { params: { token: string } }) {
   const token = params.token;
+  const router = useRouter();
   const [info, setInfo] = useState<ClaimInfo | null>(null);
   const [sent, setSent] = useState(false);
+  const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -34,7 +42,7 @@ export default function Claim({ params }: { params: { token: string } }) {
       .catch(() => setInfo({ valid: false, reason: "not_found" }));
   }, [token]);
 
-  const sendLink = async () => {
+  const sendCode = async () => {
     if (!info?.email) return;
     const supabase = getSupabase();
     if (!supabase) {
@@ -43,14 +51,37 @@ export default function Claim({ params }: { params: { token: string } }) {
     }
     setBusy(true);
     setError("");
-    const origin = window.location.origin;
-    const { error } = await supabase.auth.signInWithOtp({
-      email: info.email,
-      options: { emailRedirectTo: `${origin}/auth/callback?next=/claim/${token}/complete` },
-    });
+    const { error } = await supabase.auth.signInWithOtp({ email: info.email });
     setBusy(false);
     if (error) setError(error.message);
     else setSent(true);
+  };
+
+  const verify = async () => {
+    if (!info?.email || code.trim().length < 6) return;
+    const supabase = getSupabase();
+    if (!supabase) return;
+    setBusy(true);
+    setError("");
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      email: info.email,
+      token: code.trim(),
+      type: "email",
+    });
+    if (verifyError) {
+      setBusy(false);
+      setError("That code didn't match. Check for a typo, or request a new one.");
+      return;
+    }
+    // Session is established — finish linking this account to the beneficiary record.
+    const res = await fetch(`/api/claim/${token}/complete`, { method: "POST" });
+    const json = await res.json();
+    setBusy(false);
+    if (!res.ok) {
+      setError(json.error || "Something went wrong finishing this up.");
+      return;
+    }
+    router.push("/received");
   };
 
   return (
@@ -97,22 +128,50 @@ export default function Claim({ params }: { params: { token: string } }) {
                 <>
                   <p className="text-sm font-medium text-ink/80">To open what was left for you:</p>
                   <p className="mt-2 text-sm text-ink/70">
-                    We'll send a secure sign-in link to <span className="font-medium text-ink">{info.maskedEmail}</span> —
+                    We'll send a 6-digit code to <span className="font-medium text-ink">{info.maskedEmail}</span> —
                     the email {info.creatorName} registered for you. No password needed.
                   </p>
                   {error && <p className="mt-3 text-sm text-clay">{error}</p>}
                   <div className="mt-5">
-                    <Button onClick={sendLink} disabled={busy}>
-                      {busy ? "Sending…" : "Send me the link"}
+                    <Button onClick={sendCode} disabled={busy}>
+                      {busy ? "Sending…" : "Send me a code"}
                     </Button>
                   </div>
                 </>
               ) : (
                 <>
-                  <p className="text-sm font-medium text-ink/80">Check your inbox</p>
+                  <p className="text-sm font-medium text-ink/80">Enter your code</p>
                   <p className="mt-2 text-sm text-ink/70">
-                    We sent a sign-in link to {info.maskedEmail}. Open it on this device to continue.
+                    We sent a 6-digit code to {info.maskedEmail}. It's valid for a few minutes.
                   </p>
+                  <div className="mt-4">
+                    <Field label="Code">
+                      <input
+                        className={inputClass}
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        value={code}
+                        onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                        onKeyDown={(e) => e.key === "Enter" && verify()}
+                        placeholder="123456"
+                        autoFocus
+                      />
+                    </Field>
+                  </div>
+                  {error && <p className="mt-3 text-sm text-clay">{error}</p>}
+                  <div className="mt-4 flex items-center gap-3">
+                    <Button onClick={verify} disabled={busy || code.trim().length < 6}>
+                      {busy ? "Checking…" : "Continue"}
+                    </Button>
+                    <button
+                      onClick={sendCode}
+                      disabled={busy}
+                      className="text-sm text-sage hover:text-clay hover:underline"
+                    >
+                      Resend code
+                    </button>
+                  </div>
                 </>
               )}
             </Card>

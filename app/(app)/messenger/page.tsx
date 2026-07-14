@@ -244,6 +244,20 @@ export default function Messenger() {
             )}
           </Field>
 
+          {beneficiaryId && (
+            <p className="-mt-2 text-sm text-sage">
+              This will go to{" "}
+              <span className="font-medium text-ink">
+                {data.beneficiaries.find((b) => b.id === beneficiaryId)?.name}
+              </span>
+              {(() => {
+                const b = data.beneficiaries.find((x) => x.id === beneficiaryId);
+                return b?.email ? ` (${b.email})` : " — no email on file yet, so they won't be notified.";
+              })()}
+              . Double-check "Send to" above if that's not right.
+            </p>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={() => save("draft")} disabled={!canSave}>
               Save as draft

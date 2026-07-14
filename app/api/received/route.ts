@@ -16,6 +16,17 @@ export async function GET() {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Not configured." }, { status: 501 });
 
+  // Safety net, shared with the mobile app's equivalent Edge Function: if this exact
+  // verified email has an unclaimed beneficiary row waiting, link it now. Covers cases
+  // where a claim-link flow was interrupted or failed partway for any reason.
+  if (user.email) {
+    await admin
+      .from("beneficiaries")
+      .update({ claimed_by: user.id })
+      .is("claimed_by", null)
+      .ilike("email", user.email);
+  }
+
   // A person may have been claimed as a recipient by more than one creator (e.g. both
   // parents used Amber separately) — surface everything claimed to this account.
   const { data: beneficiaryRows } = await admin
